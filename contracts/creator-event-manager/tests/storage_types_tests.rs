@@ -2,8 +2,7 @@
 // These live in tests/ so they import via the crate name.
 
 use creator_event_manager::storage_types::{
-    Event, EventMetadata, Match, MatchResult, Prediction, Winner,
-    OUTCOME_DRAW, OUTCOME_TEAM_A, OUTCOME_TEAM_B,
+    Event, Match, MatchResult, Prediction, Winner, OUTCOME_DRAW, OUTCOME_TEAM_A, OUTCOME_TEAM_B,
 };
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Symbol};
 
@@ -249,7 +248,9 @@ fn test_match_result_submission() {
 
     let mut m = make_match(&env, 1, 100, match_time);
 
-    assert!(m.submit_result(MatchResult::TeamA, oracle.clone(), result_time).is_ok());
+    assert!(m
+        .submit_result(MatchResult::TeamA, oracle.clone(), result_time)
+        .is_ok());
 
     assert!(m.result_submitted);
     assert_eq!(m.winning_team, Some(0u32));
@@ -259,7 +260,9 @@ fn test_match_result_submission() {
     assert!(m.is_completed());
 
     // Cannot submit twice
-    assert!(m.submit_result(MatchResult::TeamB, oracle, result_time + 100).is_err());
+    assert!(m
+        .submit_result(MatchResult::TeamB, oracle, result_time + 100)
+        .is_err());
 }
 
 #[test]
@@ -289,7 +292,7 @@ fn test_match_predictions_allowed() {
 
     assert!(m.allows_predictions(match_time - 7200, 30)); // 2 h before, 30-min cutoff → ok
     assert!(!m.allows_predictions(match_time - 900, 30)); // 15 min before → blocked
-    assert!(!m.allows_predictions(match_time + 1, 30));   // after start → blocked
+    assert!(!m.allows_predictions(match_time + 1, 30)); // after start → blocked
 }
 
 #[test]
@@ -301,14 +304,26 @@ fn test_match_validation_valid() {
 #[test]
 fn test_match_validation_empty_team_a() {
     let env = Env::default();
-    let m = Match::new(1, 100, String::from_str(&env, ""), String::from_str(&env, "Beta"), 0);
+    let m = Match::new(
+        1,
+        100,
+        String::from_str(&env, ""),
+        String::from_str(&env, "Beta"),
+        0,
+    );
     assert!(m.validate().is_err());
 }
 
 #[test]
 fn test_match_validation_empty_team_b() {
     let env = Env::default();
-    let m = Match::new(1, 100, String::from_str(&env, "Alpha"), String::from_str(&env, ""), 0);
+    let m = Match::new(
+        1,
+        100,
+        String::from_str(&env, "Alpha"),
+        String::from_str(&env, ""),
+        0,
+    );
     assert!(m.validate().is_err());
 }
 
@@ -431,7 +446,14 @@ fn test_prediction_is_before_match_time() {
     let match_time = 1_640_995_200u64;
 
     // Predicted 1 hour before match
-    let pred_before = Prediction::new(1, 5, 10, predictor.clone(), outcome.clone(), match_time - 3600);
+    let pred_before = Prediction::new(
+        1,
+        5,
+        10,
+        predictor.clone(),
+        outcome.clone(),
+        match_time - 3600,
+    );
     assert!(pred_before.is_before_match_time(match_time));
 
     // Predicted exactly at match time — not before
@@ -526,7 +548,7 @@ fn test_winner_outranks_tiebreak_by_completion_time() {
     let u2 = Address::generate(&env);
 
     // Same correct count; w1 finished earlier → w1 outranks w2
-    let w1 = Winner::new(u1, 1, 5, 5, 500, 0);  // earlier completion
+    let w1 = Winner::new(u1, 1, 5, 5, 500, 0); // earlier completion
     let w2 = Winner::new(u2, 1, 5, 5, 1000, 0); // later completion
 
     assert!(w1.outranks(&w2));
@@ -545,40 +567,4 @@ fn test_winner_does_not_outrank_equal() {
 
     assert!(!w1.outranks(&w2));
     assert!(!w2.outranks(&w1));
-}
-
-// ---------------------------------------------------------------------------
-// EventMetadata tests
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_event_metadata_phases() {
-    let env = Env::default();
-    let base = 1_640_995_200u64;
-
-    let metadata = EventMetadata::new(
-        String::from_str(&env, "Sports"),
-        String::from_str(&env, "football,nfl"),
-        10,
-        1000,
-        base + 86_400,  // end_time   +24 h
-        base + 172_800, // resolution +48 h
-        false,
-        100,
-    );
-
-    // 12 h in — prediction phase
-    assert!(metadata.is_prediction_phase(base + 43_200));
-    assert!(!metadata.is_resolution_phase(base + 43_200));
-    assert!(!metadata.should_auto_resolve(base + 43_200));
-
-    // 36 h in — resolution phase
-    assert!(!metadata.is_prediction_phase(base + 129_600));
-    assert!(metadata.is_resolution_phase(base + 129_600));
-    assert!(!metadata.should_auto_resolve(base + 129_600));
-
-    // 72 h in — auto-resolve
-    assert!(!metadata.is_prediction_phase(base + 259_200));
-    assert!(!metadata.is_resolution_phase(base + 259_200));
-    assert!(metadata.should_auto_resolve(base + 259_200));
 }

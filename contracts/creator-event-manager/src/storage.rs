@@ -91,11 +91,7 @@ pub fn set_match(env: &Env, match_id: u64, m: &Match) {
 /// Read a `Prediction` from persistent storage. Extends the TTL on success.
 pub fn get_prediction(env: &Env, prediction_id: u64) -> Result<Prediction, StorageError> {
     let key = DataKey::Prediction(prediction_id);
-    match env
-        .storage()
-        .persistent()
-        .get::<DataKey, Prediction>(&key)
-    {
+    match env.storage().persistent().get::<DataKey, Prediction>(&key) {
         Some(pred) => {
             env.storage()
                 .persistent()
@@ -269,11 +265,7 @@ pub fn add_event_participant(env: &Env, event_id: u64, participant: &Address) {
 /// Return the list of verified winners for an event.
 pub fn get_event_winners(env: &Env, event_id: u64) -> Vec<Winner> {
     let key = DataKey::EventWinners(event_id);
-    match env
-        .storage()
-        .persistent()
-        .get::<DataKey, Vec<Winner>>(&key)
-    {
+    match env.storage().persistent().get::<DataKey, Vec<Winner>>(&key) {
         Some(list) => {
             env.storage()
                 .persistent()

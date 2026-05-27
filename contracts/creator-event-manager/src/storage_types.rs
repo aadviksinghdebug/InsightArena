@@ -10,9 +10,6 @@ pub const MAX_TITLE_LEN: u32 = 200;
 pub const MAX_DESCRIPTION_LEN: u32 = 1000;
 /// Maximum length for team names (characters)
 pub const MAX_TEAM_NAME_LEN: u32 = 100;
-/// Required length for invite codes (characters)
-pub const INVITE_CODE_LEN: u32 = 8;
-
 /// Valid predicted outcome symbols
 pub const OUTCOME_TEAM_A: &str = "TEAM_A";
 pub const OUTCOME_TEAM_B: &str = "TEAM_B";
@@ -71,26 +68,6 @@ impl MatchResult {
 }
 
 // ---------------------------------------------------------------------------
-// EventStatus
-// ---------------------------------------------------------------------------
-
-/// Granular status for an event beyond the simple `is_active` boolean.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum EventStatus {
-    /// Open and accepting predictions
-    Active,
-    /// Closed for new predictions, not yet resolved
-    Closed,
-    /// All match results submitted and winners verified
-    Resolved,
-    /// Cancelled by creator or admin
-    Cancelled,
-    /// Temporarily paused
-    Paused,
-}
-
-// ---------------------------------------------------------------------------
 // DataKey
 // ---------------------------------------------------------------------------
 
@@ -102,7 +79,6 @@ pub enum EventStatus {
 #[derive(Clone)]
 pub enum DataKey {
     // ── Global admin / config keys ──────────────────────────────────────────
-
     /// Contract administrator address
     Admin(Address),
 
@@ -122,7 +98,6 @@ pub enum DataKey {
     XLMToken(Address),
 
     // ── Global counters ─────────────────────────────────────────────────────
-
     /// Monotonically increasing event counter → u64
     EventCounter(u64),
 
@@ -133,7 +108,6 @@ pub enum DataKey {
     PredictionCounter(u64),
 
     // ── Core entity keys ────────────────────────────────────────────────────
-
     /// Core event data keyed by event_id
     Event(u64),
 
@@ -144,7 +118,6 @@ pub enum DataKey {
     Prediction(u64),
 
     // ── Relationship / index keys ────────────────────────────────────────────
-
     /// Vec<u64> of match IDs belonging to an event  (event_id)
     EventMatches(u64),
 
@@ -160,21 +133,9 @@ pub enum DataKey {
     /// Vec<Winner> of verified winners for an event  (event_id)
     EventWinners(u64),
 
-    // ── Access / invite keys ─────────────────────────────────────────────────
-
-    /// Whether an address has passed KYC / verification  (address) → bool
-    VerifiedAddresses(Address),
-
-    /// Invite code → event_id mapping  (8-char Symbol)
-    InviteCode(Symbol),
-
-    // ── Legacy / compatibility keys ──────────────────────────────────────────
-
-    /// Global contract configuration singleton
-    Config,
-
-    /// Running XLM balance held by the contract treasury
-    TreasuryBalance,
+    // ── Initialization sentinel ──────────────────────────────────────────────
+    /// Set to `true` once `initialize` has been called; prevents re-init.
+    Initialized,
 }
 
 // ---------------------------------------------------------------------------
@@ -459,7 +420,9 @@ impl Match {
     /// Predictions close `prediction_cutoff_minutes` before `match_time` and
     /// are always closed once a result has been submitted.
     pub fn allows_predictions(&self, current_time: u64, prediction_cutoff_minutes: u64) -> bool {
-        let cutoff = self.match_time.saturating_sub(prediction_cutoff_minutes * 60);
+        let cutoff = self
+            .match_time
+            .saturating_sub(prediction_cutoff_minutes * 60);
         current_time < cutoff && !self.result_submitted
     }
 
@@ -674,78 +637,5 @@ impl Winner {
         }
         // Earlier completion time is better (lower value = higher rank)
         self.completion_time < other.completion_time
-    }
-}
-
-// ---------------------------------------------------------------------------
-// EventMetadata  (kept for backward compatibility)
-// ---------------------------------------------------------------------------
-
-/// Extended metadata stored separately from the core `Event` to keep the
-/// hot-path struct lean.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EventMetadata {
-    /// Category label, e.g. "Sports", "Crypto", "Politics"
-    pub category: String,
-
-    /// Comma-separated discovery tags
-    pub tags: String,
-
-    /// Minimum participants required for the event to be valid
-    pub min_participants: u32,
-
-    /// Maximum participants allowed (mirrors `Event::max_participants`)
-    pub max_participants: u32,
-
-    /// Unix timestamp when predictions close
-    pub end_time: u64,
-
-    /// Unix timestamp when results must be submitted
-    pub resolution_time: u64,
-
-    /// Whether the event requires an invite code to join
-    pub is_invite_only: bool,
-
-    /// Creator's reputation score at the time of event creation
-    pub creator_reputation: u32,
-}
-
-impl EventMetadata {
-    pub fn new(
-        category: String,
-        tags: String,
-        min_participants: u32,
-        max_participants: u32,
-        end_time: u64,
-        resolution_time: u64,
-        is_invite_only: bool,
-        creator_reputation: u32,
-    ) -> Self {
-        Self {
-            category,
-            tags,
-            min_participants,
-            max_participants,
-            end_time,
-            resolution_time,
-            is_invite_only,
-            creator_reputation,
-        }
-    }
-
-    /// `true` while predictions are still open.
-    pub fn is_prediction_phase(&self, current_time: u64) -> bool {
-        current_time < self.end_time
-    }
-
-    /// `true` after predictions close but before the resolution deadline.
-    pub fn is_resolution_phase(&self, current_time: u64) -> bool {
-        current_time >= self.end_time && current_time < self.resolution_time
-    }
-
-    /// `true` once the resolution deadline has passed.
-    pub fn should_auto_resolve(&self, current_time: u64) -> bool {
-        current_time >= self.resolution_time
     }
 }

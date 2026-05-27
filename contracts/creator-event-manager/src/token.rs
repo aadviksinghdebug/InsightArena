@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, token::Client as TokenClient};
+use soroban_sdk::{token::Client as TokenClient, Address, Env};
 
 /// Token operation errors
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,7 +38,7 @@ impl TokenHelper {
         }
 
         let client = Self::new_client(env, token_address);
-        
+
         // Check if the sender has sufficient balance
         let balance = client.balance(from);
         if balance < amount {
@@ -49,7 +49,7 @@ impl TokenHelper {
         // Note: This will panic if authorization is not properly set up
         // The calling contract must ensure proper authorization
         client.transfer_from(&env.current_contract_address(), from, to, &amount);
-        
+
         Ok(())
     }
 
@@ -67,7 +67,7 @@ impl TokenHelper {
 
         let client = Self::new_client(env, token_address);
         let contract_address = env.current_contract_address();
-        
+
         // Check if the contract has sufficient balance
         let balance = client.balance(&contract_address);
         if balance < amount {
@@ -76,7 +76,7 @@ impl TokenHelper {
 
         // Perform the transfer
         client.transfer(&contract_address, to, &amount);
-        
+
         Ok(())
     }
 
@@ -195,14 +195,14 @@ mod tests {
     #[test]
     fn test_calculate_total_pool() {
         use soroban_sdk::{Env, Vec};
-        
+
         let env = Env::default();
         let mut stakes = Vec::new(&env);
         stakes.push_back(100i128);
         stakes.push_back(200i128);
         stakes.push_back(300i128);
         stakes.push_back(150i128);
-        
+
         let total = TokenHelper::calculate_total_pool(&stakes);
         assert_eq!(total, 750);
     }
