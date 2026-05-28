@@ -3,11 +3,13 @@
 pub mod admin;
 pub mod storage;
 pub mod storage_types;
+pub mod verification;
 mod token;
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 
 use admin::AdminError;
+use verification::VerificationError;
 
 // ---------------------------------------------------------------------------
 // Contract entry point
@@ -150,5 +152,75 @@ impl CreatorEventManagerContract {
     /// Returns the current AI agent address, or panics if not initialised.
     pub fn get_ai_agent(env: Env) -> Address {
         admin::get_ai_agent(&env).unwrap_or_else(|| panic!("not_initialized"))
+    }
+
+    // =========================================================================
+    // Verification (#790–#793)
+    // =========================================================================
+
+    /// Grant verification status to a single address.
+    ///
+    /// Only the admin may call this. The address must not equal the contract
+    /// address and must not already be verified.
+    ///
+    /// # Panics
+    /// * `"unauthorized"` — caller is not the admin.
+    /// * `"invalid_address"` — address equals the contract address.
+    /// * `"already_verified"` — address is already verified.
+    pub fn verify_address(env: Env, caller: Address, address: Address) {
+        match verification::verify_address(&env, caller, address) {
+            Ok(()) => {}
+            Err(VerificationError::Unauthorized) => panic!("unauthorized"),
+            Err(VerificationError::InvalidAddress) => panic!("invalid_address"),
+            Err(VerificationError::AlreadyVerified) => panic!("already_verified"),
+            Err(_) => panic!("unexpected_error"),
+        }
+    }
+
+    /// Grant verification status to multiple addresses in a single transaction.
+    ///
+    /// Only the admin may call this. The list must be non-empty and no address
+    /// may equal the contract address. Already-verified addresses are skipped.
+    /// Returns the number of newly verified addresses.
+    ///
+    /// # Panics
+    /// * `"unauthorized"` — caller is not the admin.
+    /// * `"empty_list"` — the address list is empty.
+    /// * `"invalid_address"` — any address in the list equals the contract address.
+    pub fn batch_verify_addresses(env: Env, caller: Address, addresses: Vec<Address>) -> u32 {
+        match verification::batch_verify_addresses(&env, caller, addresses) {
+            Ok(count) => count,
+            Err(VerificationError::Unauthorized) => panic!("unauthorized"),
+            Err(VerificationError::EmptyList) => panic!("empty_list"),
+            Err(VerificationError::InvalidAddress) => panic!("invalid_address"),
+            Err(_) => panic!("unexpected_error"),
+        }
+    }
+
+    /// Remove verification status from an address.
+    ///
+    /// Only the admin may call this. The address must not equal the contract
+    /// address and must currently be verified.
+    ///
+    /// # Panics
+    /// * `"unauthorized"` — caller is not the admin.
+    /// * `"invalid_address"` — address equals the contract address.
+    /// * `"not_verified"` — address is not currently verified.
+    pub fn unverify_address(env: Env, caller: Address, address: Address) {
+        match verification::unverify_address(&env, caller, address) {
+            Ok(()) => {}
+            Err(VerificationError::Unauthorized) => panic!("unauthorized"),
+            Err(VerificationError::InvalidAddress) => panic!("invalid_address"),
+            Err(VerificationError::NotVerified) => panic!("not_verified"),
+            Err(_) => panic!("unexpected_error"),
+        }
+    }
+
+    /// Check whether an address is verified.
+    ///
+    /// Public view function — no authentication required. Returns `false` for
+    /// any address that has never been verified or does not exist in storage.
+    pub fn is_verified(env: Env, address: Address) -> bool {
+        verification::is_verified(&env, address)
     }
 }
